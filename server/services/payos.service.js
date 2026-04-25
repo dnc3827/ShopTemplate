@@ -34,10 +34,51 @@ export function calculateAmount(basePrice, promoPct, plan) {
 }
 
 /**
- * Tạo chữ ký HMAC-SHA256 cho PayOS
- * Sorted keys → key=value&... → HMAC
+ * Các field PayOS dùng để tính chữ ký — theo thứ tự alphabet cố định
+ * Ref: https://payos.vn/docs/tich-hop-payos/api-tich-hop/
  */
-function createSignature(data) {
+const PAYOS_SIGNATURE_FIELDS = [
+  'amount',
+  'canceledAt',
+  'cancellationReason',
+  'code',
+  'counterAccountBankId',
+  'counterAccountBankName',
+  'counterAccountName',
+  'counterAccountNumber',
+  'currency',
+  'description',
+  'orderCode',
+  'paymentLinkId',
+  'reference',
+  'transactionDateTime',
+  'transferAmount',
+  'virtualAccountName',
+  'virtualAccountNumber',
+]
+
+/**
+ * Tạo chuỗi ký theo đúng format PayOS:
+ * - Chỉ lấy các field trong PAYOS_SIGNATURE_FIELDS từ object data
+ * - Giá trị null/undefined → chuỗi rỗng ""
+ * - Join bằng "&"
+ * - Tính HMAC-SHA256 với checksumKey
+ */
+function createWebhookSignature(data) {
+  const stringToSign = PAYOS_SIGNATURE_FIELDS
+    .map(field => {
+      const value = data[field]
+      return `${field}=${value === null || value === undefined ? '' : value}`
+    })
+    .join('&')
+  return { stringToSign, hmac: crypto.createHmac('sha256', PAYOS_CHECKSUM_KEY).update(stringToSign).digest('hex') }
+}
+
+/**
+ * Tạo chữ ký HMAC-SHA256 cho PayOS payment request
+ * (Dùng khi tạo đơn hàng — sorted keys, khác với webhook verify)
+ */
+function createRequestSignature(data) {
   const sortedKeys = Object.keys(data).sort()
   const payload = sortedKeys
     .map(k => `${k}=${data[k]}`)
@@ -53,27 +94,34 @@ function createSignature(data) {
  * @param {object} webhookData - Dữ liệu từ PayOS webhook body
  * @returns {boolean}
  */
-export function verifyWebhookSignature(webhookData) {
+export function verifyWebhookSignature(webhookBody) {
   if (!PAYOS_CHECKSUM_KEY) {
     console.error('[PayOS] PAYOS_CHECKSUM_KEY is not set — cannot verify webhook')
     return false
   }
 
-  const { signature, ...rest } = webhookData
+  const receivedSignature = webhookBody.signature
+  if (!receivedSignature) {
+    console.warn('[PayOS] webhook: no signature in body')
+    return false
+  }
 
-  if (!signature) return false
+  // PayOS sign trên object "data" bên trong body, không phải toàn bộ body
+  const dataObj = webhookBody.data || webhookBody
 
-  const expected = createSignature(rest)
-  console.log('[PayOS] webhook verify — expected:', expected, '| received:', signature)
+  const { stringToSign, hmac: computedHmac } = createWebhookSignature(dataObj)
+
+  console.log('[PayOS] Data fields used:', JSON.stringify(dataObj, null, 2))
+  console.log('[PayOS] String to sign:', stringToSign)
+  console.log('[PayOS] Computed HMAC:', computedHmac)
+  console.log('[PayOS] Received sig: ', receivedSignature)
 
   try {
-    // So sánh an toàn, tránh timing attack
     return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(signature, 'hex')
+      Buffer.from(computedHmac, 'hex'),
+      Buffer.from(receivedSignature, 'hex')
     )
   } catch (e) {
-    // Xảy ra nếu signature không phải hex hợp lệ
     console.error('[PayOS] timingSafeEqual error:', e.message)
     return false
   }
@@ -97,8 +145,8 @@ export async function createPayosOrder({ orderCode, amount, description, returnU
     cancelUrl,
   }
 
-  // Tạo signature cho request
-  const signature = createSignature(payload)
+  // Tạo signature cho request (dùng sorted keys — khác với webhook)
+  const signature = createRequestSignature(payload)
 
   const response = await fetch(`${PAYOS_API_URL}/v2/payment-requests`, {
     method: 'POST',
