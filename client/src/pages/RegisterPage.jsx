@@ -106,7 +106,9 @@ export default function RegisterPage() {
               className="!bg-[#121619] !border-[#6B6E70] !rounded-lg focus:!border-[#86C232] focus:!ring-[#86C232] text-white"
             />
 
+{/* TODO: Bật lại Turnstile sau khi fix config
             <Turnstile />
+            */}
 
             <Button type="submit" className="w-full font-semibold shadow-lg shadow-primary/20" size="lg" isLoading={loading}>
               Đăng ký tài khoản

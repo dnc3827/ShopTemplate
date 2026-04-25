@@ -115,7 +115,9 @@ export default function LoginPage() {
               </Link>
             </div>
 
+{/* TODO: Bật lại Turnstile sau khi fix config
             <Turnstile />
+            */}
 
             <Button type="submit" className="w-full font-semibold shadow-lg shadow-primary/20" size="lg" isLoading={loading}>
               Đăng nhập

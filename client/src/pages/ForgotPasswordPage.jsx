@@ -25,10 +25,12 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    /* TODO: Bật lại Turnstile sau khi fix config
     if (TURNSTILE_SITE_KEY && !turnstileToken) {
       toast.error('Vui lòng xác minh Captcha.')
       return
     }
+    */
 
     setLoading(true)
 
@@ -69,20 +71,22 @@ export default function ForgotPasswordPage() {
               className="!bg-[#121619] !border-[#6B6E70] !rounded-lg focus:!border-[#86C232] focus:!ring-[#86C232] text-white"
             />
 
+{/* TODO: Bật lại Turnstile sau khi fix config
             <Turnstile 
               onSuccess={handleTurnstileSuccess} 
               onExpired={handleTurnstileExpired}
             />
+            */}
 
             <Button 
               type="submit" 
               className={`w-full font-semibold shadow-lg transition-all ${
-                (!turnstileToken && TURNSTILE_SITE_KEY) || loading
+                loading
                   ? '!bg-[#474B4F] !text-white shadow-none opacity-80 cursor-not-allowed border-none'
                   : '!bg-[#61892F] !text-white shadow-[#61892F]/20 hover:scale-[1.02]'
               }`} 
               size="lg" 
-              disabled={(!turnstileToken && TURNSTILE_SITE_KEY) || loading}
+              disabled={loading}
               isLoading={loading}
             >
               Gửi mã OTP
