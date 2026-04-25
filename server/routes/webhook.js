@@ -30,14 +30,16 @@ router.post('/payos', async (req, res) => {
       return res.status(200).json({ success: false, message: 'Invalid signature' })
     }
 
-    const { orderCode, status } = body
+    const webhookBody = req.body
+    const orderCode = webhookBody.data?.orderCode
+    const isPaid = webhookBody.code === '00' && webhookBody.success === true
 
     console.log('[Webhook] HMAC verified, processing...')
     console.log('[Webhook] Order code:', orderCode)
-    console.log('[Webhook] Status:', status)
+    console.log('[Webhook] Is Paid:', isPaid)
 
-    // Bước 3: Chỉ xử lý khi status = PAID
-    if (status !== 'PAID') {
+    // Bước 3: Chỉ xử lý khi thanh toán thành công
+    if (!isPaid) {
       return res.status(200).json({ success: true, message: 'Non-paid event acknowledged' })
     }
 
