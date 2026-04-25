@@ -32,6 +32,10 @@ router.post('/payos', async (req, res) => {
 
     const { orderCode, status } = body
 
+    console.log('[Webhook] HMAC verified, processing...')
+    console.log('[Webhook] Order code:', orderCode)
+    console.log('[Webhook] Status:', status)
+
     // Bước 3: Chỉ xử lý khi status = PAID
     if (status !== 'PAID') {
       return res.status(200).json({ success: true, message: 'Non-paid event acknowledged' })
@@ -43,6 +47,8 @@ router.post('/payos', async (req, res) => {
       .select('id, user_id, template_id, plan, status')
       .eq('order_code', String(orderCode))
       .single()
+
+    console.log('[Webhook] Found order:', order)
 
     if (orderError || !order) {
       console.error('PayOS webhook: order not found', orderCode)
@@ -56,10 +62,13 @@ router.post('/payos', async (req, res) => {
 
     // Bước 6: Cập nhật order → paid
     const paidAt = new Date().toISOString()
-    await supabaseAdmin
+    const updateResult = await supabaseAdmin
       .from('orders')
       .update({ status: 'paid', paid_at: paidAt })
       .eq('id', order.id)
+      .select()
+
+    console.log('[Webhook] Order updated:', updateResult)
 
     // Bước 7: Tính expires_at theo plan
     const days = PLAN_DAYS[order.plan]
@@ -68,7 +77,7 @@ router.post('/payos', async (req, res) => {
       : null  // null = vĩnh viễn (không có plan phù hợp thì activate vĩnh viễn)
 
     // Bước 8: Upsert subscription
-    const { error: subError } = await supabaseAdmin
+    const subResult = await supabaseAdmin
       .from('subscriptions')
       .upsert(
         {
@@ -80,9 +89,12 @@ router.post('/payos', async (req, res) => {
         },
         { onConflict: 'user_id,template_id' }
       )
+      .select()
 
-    if (subError) {
-      console.error('PayOS webhook: upsert subscription error', subError)
+    console.log('[Webhook] Subscription created:', subResult)
+
+    if (subResult.error) {
+      console.error('PayOS webhook: upsert subscription error', subResult.error)
       // Không throw — đã paid, sẽ handle thủ công nếu cần
     }
 
