@@ -58,20 +58,23 @@ const PAYOS_SIGNATURE_FIELDS = [
 ]
 
 /**
- * Tạo chuỗi ký theo đúng format PayOS:
- * - Chỉ lấy các field trong PAYOS_SIGNATURE_FIELDS từ object data
+ * Tạo chuỗi ký theo đúng format PayOS webhook:
+ * - Lấy TẤT CẢ keys từ data object (không hardcode)
+ * - Sort theo alphabet
  * - Giá trị null/undefined → chuỗi rỗng ""
  * - Join bằng "&"
  * - Tính HMAC-SHA256 với checksumKey
  */
 function createWebhookSignature(data) {
-  const stringToSign = PAYOS_SIGNATURE_FIELDS
-    .map(field => {
-      const value = data[field]
-      return `${field}=${value === null || value === undefined ? '' : value}`
+  const sortedKeys = Object.keys(data).sort()
+  const stringToSign = sortedKeys
+    .map(key => {
+      const value = data[key]
+      return `${key}=${value === null || value === undefined ? '' : value}`
     })
     .join('&')
-  return { stringToSign, hmac: crypto.createHmac('sha256', PAYOS_CHECKSUM_KEY).update(stringToSign).digest('hex') }
+  const hmac = crypto.createHmac('sha256', PAYOS_CHECKSUM_KEY).update(stringToSign).digest('hex')
+  return { sortedKeys, stringToSign, hmac }
 }
 
 /**
@@ -109,9 +112,10 @@ export function verifyWebhookSignature(webhookBody) {
   // PayOS sign trên object "data" bên trong body, không phải toàn bộ body
   const dataObj = webhookBody.data || webhookBody
 
-  const { stringToSign, hmac: computedHmac } = createWebhookSignature(dataObj)
+  const { sortedKeys, stringToSign, hmac: computedHmac } = createWebhookSignature(dataObj)
 
-  console.log('[PayOS] Data fields used:', JSON.stringify(dataObj, null, 2))
+  console.log('[PayOS] Raw data object:', JSON.stringify(dataObj, null, 2))
+  console.log('[PayOS] Keys used (sorted):', sortedKeys)
   console.log('[PayOS] String to sign:', stringToSign)
   console.log('[PayOS] Computed HMAC:', computedHmac)
   console.log('[PayOS] Received sig: ', receivedSignature)
