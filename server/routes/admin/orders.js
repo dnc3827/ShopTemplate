@@ -17,8 +17,7 @@ router.get('/', async (req, res) => {
     .from('orders')
     .select(`
       id, order_code, plan, amount, original_amount, discount_pct,
-      status, created_at, paid_at,
-      profiles ( id, email, display_name ),
+      status, created_at, paid_at, user_id,
       templates ( id, slug, name )
     `)
     .order('created_at', { ascending: false })

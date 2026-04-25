@@ -46,7 +46,7 @@ export default function AdminOrders() {
           <table className="w-full text-left">
             <thead className="bg-bg-dark/50 text-gray-400 text-sm">
               <tr>
-                <th className="px-6 py-3 font-medium">Khách hàng</th>
+                <th className="px-6 py-3 font-medium">User ID</th>
                 <th className="px-6 py-3 font-medium">Template & Gói</th>
                 <th className="px-6 py-3 font-medium">Số tiền</th>
                 <th className="px-6 py-3 font-medium text-center">Trạng thái</th>
@@ -58,8 +58,7 @@ export default function AdminOrders() {
                  <tr key={order.id} className="hover:bg-bg-dark/30">
                     <td className="px-6 py-4">
                        <div className="flex flex-col">
-                          <span className="font-medium text-white">{order.profiles?.display_name || order.profiles?.email}</span>
-                          <span className="text-xs text-gray-400">{order.profiles?.email}</span>
+                          <span className="text-xs text-gray-400 font-mono">{order.user_id?.substring(0, 22)}...</span>
                        </div>
                     </td>
                     <td className="px-6 py-4">

@@ -7,6 +7,12 @@ const PAYOS_API_KEY        = process.env.PAYOS_API_KEY
 const PAYOS_CHECKSUM_KEY   = process.env.PAYOS_CHECKSUM_KEY
 const PAYOS_API_URL        = 'https://api-merchant.payos.vn'
 
+// Debug startup — kiểm tra env đọc đúng chưa (xóa sau khi fix)
+console.log('[PayOS] PAYOS_CLIENT_ID set:', !!PAYOS_CLIENT_ID)
+console.log('[PayOS] PAYOS_API_KEY set:', !!PAYOS_API_KEY)
+console.log('[PayOS] PAYOS_CHECKSUM_KEY set:', !!PAYOS_CHECKSUM_KEY)
+console.log('[PayOS] PAYOS_CHECKSUM_KEY length:', PAYOS_CHECKSUM_KEY?.length ?? 0)
+
 // Multiplier theo gói
 const PLAN_MULTIPLIER  = { '1month': 1, '3months': 3, '1year': 12 }
 // Giảm thêm theo gói (%)
@@ -48,16 +54,29 @@ function createSignature(data) {
  * @returns {boolean}
  */
 export function verifyWebhookSignature(webhookData) {
+  if (!PAYOS_CHECKSUM_KEY) {
+    console.error('[PayOS] PAYOS_CHECKSUM_KEY is not set — cannot verify webhook')
+    return false
+  }
+
   const { signature, ...rest } = webhookData
 
   if (!signature) return false
 
   const expected = createSignature(rest)
-  // So sánh an toàn, tránh timing attack
-  return crypto.timingSafeEqual(
-    Buffer.from(expected, 'hex'),
-    Buffer.from(signature, 'hex')
-  )
+  console.log('[PayOS] webhook verify — expected:', expected, '| received:', signature)
+
+  try {
+    // So sánh an toàn, tránh timing attack
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(signature, 'hex')
+    )
+  } catch (e) {
+    // Xảy ra nếu signature không phải hex hợp lệ
+    console.error('[PayOS] timingSafeEqual error:', e.message)
+    return false
+  }
 }
 
 /**

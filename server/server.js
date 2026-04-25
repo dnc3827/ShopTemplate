@@ -25,6 +25,10 @@ import adminStatsRouter       from './routes/admin/stats.js'
 
 const app = express()
 
+// Trust proxy — Railway/Render dùng reverse proxy, cần set để rate limiter đọc đúng IP
+// Fix: ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1)
+
 // CORS: đọc từ env ALLOWED_ORIGINS — KHÔNG hardcode domain
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['http://localhost:5173']
 
