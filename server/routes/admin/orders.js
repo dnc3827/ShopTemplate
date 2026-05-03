@@ -39,14 +39,13 @@ router.get('/', async (req, res) => {
 
 /**
  * PATCH /api/admin/orders/:id/activate
- * Mở thủ công: đặt order status = 'paid' và upsert subscription
+ * Mở thủ công: đặt order status = 'paid' và tạo purchase
  * Dùng khi cần xử lý đơn hàng thủ công (PayOS lỗi, chuyển khoản tay, etc.)
  */
 router.patch('/:id/activate', async (req, res) => {
-  // Lấy đơn hàng
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
-    .select('id, status, user_id, template_id, plan')
+    .select('id, status, user_id, template_id')
     .eq('id', req.params.id)
     .single()
 
@@ -58,12 +57,7 @@ router.patch('/:id/activate', async (req, res) => {
     return res.status(400).json({ error: 'Đơn hàng đã được thanh toán trước đó' })
   }
 
-  const PLAN_DAYS = { '1month': 30, '3months': 90, '1year': 365 }
-  const paidAt  = new Date().toISOString()
-  const days    = PLAN_DAYS[order.plan]
-  const expiresAt = days
-    ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-    : null
+  const paidAt = new Date().toISOString()
 
   // Cập nhật order → paid
   const { error: updateError } = await supabaseAdmin
@@ -75,26 +69,25 @@ router.patch('/:id/activate', async (req, res) => {
     return res.status(500).json({ error: 'Không thể cập nhật đơn hàng' })
   }
 
-  // Upsert subscription
-  const { error: subError } = await supabaseAdmin
-    .from('subscriptions')
+  // Upsert purchase (one-time, không có expires_at)
+  const { error: purchaseError } = await supabaseAdmin
+    .from('purchases')
     .upsert(
       {
         user_id: order.user_id,
         template_id: order.template_id,
-        expires_at: expiresAt,
-        is_active: true,
-        updated_at: paidAt,
+        order_id: order.id,
+        purchased_at: paidAt,
       },
       { onConflict: 'user_id,template_id' }
     )
 
-  if (subError) {
-    console.error('admin activate order sub upsert error:', subError)
+  if (purchaseError) {
+    console.error('admin activate order purchase upsert error:', purchaseError)
     // Order đã paid — chấp nhận partial success, log để xử lý thủ công
   }
 
-  res.json({ message: 'Đơn hàng đã được kích hoạt thủ công', data: { id: order.id, status: 'paid', paid_at: paidAt, expires_at: expiresAt } })
+  res.json({ message: 'Đơn hàng đã được kích hoạt thủ công', data: { id: order.id, status: 'paid', paid_at: paidAt } })
 })
 
 export default router

@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'ShopTemplate',
-        short_name: 'ShopT',
+        name: 'PhanMemMau',
+        short_name: 'PhanMemMau',
         description: 'Quality templates for everyone',
         theme_color: '#222629',
         icons: [

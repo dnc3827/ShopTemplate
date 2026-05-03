@@ -7,7 +7,7 @@ dotenv.config()
 // Import routes — MODULE 2A
 import templatesRouter    from './routes/templates.js'
 import categoriesRouter   from './routes/categories.js'
-import subscriptionsRouter from './routes/subscriptions.js'
+import purchasesRouter    from './routes/purchases.js'
 import accountRouter      from './routes/account.js'
 
 // Import routes — MODULE 2B
@@ -53,7 +53,7 @@ app.get('/health', (req, res) => {
 // Mount routes — MODULE 2A
 app.use('/api/templates',    templatesRouter)
 app.use('/api/categories',   categoriesRouter)
-app.use('/api/subscriptions', subscriptionsRouter)
+app.use('/api/purchases',    purchasesRouter)
 app.use('/api/account',      accountRouter)
 
 // Mount routes — MODULE 2B

@@ -4,16 +4,13 @@ import { auth } from '../middleware/auth.js'
 import { checkoutLimiter } from '../middleware/rateLimit.js'
 import { supabaseAdmin } from '../lib/supabase.js'
 import { getActivePromotion } from '../services/promotion.service.js'
-import { calculateAmount, createPayosOrder, getPayosOrderStatus } from '../services/payos.service.js'
-import crypto from 'crypto'
+import { createPayosOrder, getPayosOrderStatus } from '../services/payos.service.js'
 
 const router = Router()
 
-const VALID_PLANS = ['1month', '3months', '1year']
-
 /**
  * POST /api/checkout/create
- * Tạo đơn hàng PayOS và trả về QR code
+ * Tạo đơn hàng PayOS (One-time purchase)
  * user_id lấy từ req.user (JWT) — KHÔNG từ body
  */
 router.post(
@@ -22,7 +19,6 @@ router.post(
   checkoutLimiter,
   [
     body('template_id').isUUID().withMessage('template_id không hợp lệ'),
-    body('plan').isIn(VALID_PLANS).withMessage('Plan phải là 1month, 3months hoặc 1year'),
   ],
   async (req, res) => {
     const errors = validationResult(req)
@@ -30,7 +26,7 @@ router.post(
       return res.status(400).json({ error: errors.array()[0].msg })
     }
 
-    const { template_id, plan } = req.body
+    const { template_id } = req.body
     const userId = req.user.id
 
     // Lấy thông tin template
@@ -52,29 +48,25 @@ router.post(
       return res.status(400).json({ error: 'Template này miễn phí, không cần thanh toán' })
     }
 
-    // Kiểm tra đã có subscription còn hiệu lực chưa
-    const { data: existingSub } = await supabaseAdmin
-      .from('subscriptions')
-      .select('id, expires_at')
+    // Kiểm tra đã mua chưa (one-time purchase — không cho mua lại)
+    const { data: existingPurchase } = await supabaseAdmin
+      .from('purchases')
+      .select('id')
       .eq('user_id', userId)
       .eq('template_id', template_id)
       .single()
 
-    if (existingSub?.expires_at) {
-      const daysLeft = Math.ceil((new Date(existingSub.expires_at) - new Date()) / (1000 * 60 * 60 * 24))
-      // Cho phép gia hạn nếu còn <= 7 ngày
-      if (daysLeft > 7) {
-        return res.status(409).json({ error: 'Bạn đã có subscription còn hiệu lực' })
-      }
+    if (existingPurchase) {
+      return res.status(409).json({ error: 'Bạn đã mua template này rồi' })
     }
 
     // Lấy promotion đang active (nếu có)
     const promo = await getActivePromotion()
     const promoPct = promo?.discount_pct || 0
 
-    // Tính amount bằng calculateAmount() — KHÔNG lưu DB trực tiếp
-    const originalAmount = calculateAmount(template.price, 0, plan)
-    const amount = calculateAmount(template.price, promoPct, plan)
+    // Tính amount — one-time price (không nhân hệ số plan)
+    const originalAmount = template.price
+    const amount = Math.round(template.price * (1 - promoPct / 100))
     const discountPct = promoPct
 
     // Tạo order_code unique (timestamp + random)
@@ -87,7 +79,7 @@ router.post(
         order_code: orderCode,
         user_id: userId,
         template_id,
-        plan,
+        plan: 'lifetime',        // cột plan vẫn giữ, đặt 'lifetime' cho rõ
         amount,
         original_amount: originalAmount,
         discount_pct: discountPct,
@@ -107,7 +99,7 @@ router.post(
       const payosResult = await createPayosOrder({
         orderCode,
         amount,
-        description: `EZT-${template_id.substring(0, 8)}`,
+        description: `PMM-${template_id.substring(0, 8)}`,
         returnUrl: `${process.env.ALLOWED_ORIGINS?.split(',')[0] || 'http://localhost:5173'}/thanh-toan-thanh-cong`,
         cancelUrl: `${process.env.ALLOWED_ORIGINS?.split(',')[0] || 'http://localhost:5173'}/checkout/${template_id}`,
       })
@@ -115,7 +107,6 @@ router.post(
       payosOrderId = payosResult.payosOrderId
     } catch (payosErr) {
       console.error('PayOS createOrder failed:', payosErr)
-      // Cập nhật order thành failed
       await supabaseAdmin.from('orders').update({ status: 'failed' }).eq('id', order.id)
       return res.status(502).json({ error: 'Không thể tạo thanh toán PayOS. Vui lòng thử lại.' })
     }
@@ -133,7 +124,6 @@ router.post(
         amount,
         original_amount: originalAmount,
         discount_pct: discountPct,
-        plan,
       }
     })
   }
@@ -148,10 +138,9 @@ router.get('/:order_code/status', auth, async (req, res) => {
   const { order_code } = req.params
   const userId = req.user.id
 
-  // Lấy đơn hàng từ DB (verify ownership)
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
-    .select('id, status, amount, plan, template_id, paid_at')
+    .select('id, status, amount, template_id, paid_at')
     .eq('order_code', order_code)
     .eq('user_id', userId)
     .single()
@@ -173,7 +162,6 @@ router.get('/:order_code/status', auth, async (req, res) => {
     res.json({ data: { status: normalizedStatus } })
   } catch (err) {
     console.error('polling PayOS error:', err)
-    // Trả về status hiện tại trong DB nếu PayOS không phản hồi
     res.json({ data: { status: order.status } })
   }
 })

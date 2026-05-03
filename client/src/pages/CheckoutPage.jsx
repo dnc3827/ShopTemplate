@@ -6,53 +6,18 @@ import Button from '../components/ui/Button'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 
-const PLANS = [
-  {
-    id: '1month',
-    label: '1 Tháng',
-    multiplier: 1,
-    planDiscount: 0,
-    badge: null,
-  },
-  {
-    id: '3months',
-    label: '3 Tháng',
-    multiplier: 3,
-    planDiscount: 15,
-    badge: 'Tiết kiệm 15%',
-    popular: true,
-  },
-  {
-    id: '1year',
-    label: '1 Năm',
-    multiplier: 12,
-    planDiscount: 30,
-    badge: 'Tiết kiệm 30%',
-  },
-]
-
-const POLLING_INTERVAL = 3000 // 3 giây
-const TIMEOUT_MS = 10 * 60 * 1000 // 10 phút
-
-// Tính giá frontend (để preview — server sẽ recalculate)
-function calcPreviewAmount(basePrice, promoPct, plan) {
-  const p = PLANS.find(pl => pl.id === plan)
-  if (!p) return basePrice
-  const afterPromo = basePrice * (1 - (promoPct || 0) / 100)
-  const subtotal = afterPromo * p.multiplier
-  return Math.round(subtotal * (1 - p.planDiscount / 100))
-}
+const POLLING_INTERVAL = 3000  // 3 giây
+const TIMEOUT_MS = 10 * 60 * 1000  // 10 phút
 
 export default function CheckoutPage() {
   const { template_id } = useParams()
   const navigate = useNavigate()
 
-  const [selectedPlan, setSelectedPlan] = useState('1month')
   const [orderCode, setOrderCode] = useState(null)
   const [qrDataUrl, setQrDataUrl] = useState(null)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [polling, setPolling] = useState(false)
-  const [countdown, setCountdown] = useState(TIMEOUT_MS / 1000) // giây
+  const [countdown, setCountdown] = useState(TIMEOUT_MS / 1000)
   const [timedOut, setTimedOut] = useState(false)
 
   const pollingRef = useRef(null)
@@ -117,7 +82,6 @@ export default function CheckoutPage() {
               template_id,
               template_name: template?.name,
               order_code: code,
-              plan: selectedPlan,
             }
           })
         }
@@ -125,19 +89,19 @@ export default function CheckoutPage() {
         console.error('Polling error:', err)
       }
     }, POLLING_INTERVAL)
-  }, [navigate, stopPolling, template, template_id, selectedPlan])
+  }, [navigate, stopPolling, template, template_id])
 
   const handlePayment = async () => {
     setPaymentLoading(true)
     try {
       const result = await apiFetch('/checkout/create', {
         method: 'POST',
-        body: JSON.stringify({ template_id, plan: selectedPlan }),
+        body: JSON.stringify({ template_id }),
       })
 
       const { order_code, qr_code } = result.data
 
-      // Render QR bằng qrcode.js — KHÔNG redirect PayOS
+      // Render QR bằng qrcode.js
       const dataUrl = await QRCode.toDataURL(qr_code, {
         width: 256,
         margin: 2,
@@ -177,11 +141,12 @@ export default function CheckoutPage() {
   }
 
   const basePrice = template.price
-  const promoPct = template.promo_pct || 0
+  const discountedPrice = template.discounted_price
 
   return (
     <div className="py-8 px-4 max-w-2xl mx-auto flex flex-col gap-6">
-      <button 
+      {/* Back button */}
+      <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-[#A0A4A8] hover:text-white transition-colors text-sm w-fit"
       >
@@ -196,72 +161,45 @@ export default function CheckoutPage() {
         {template.image_url && (
           <img src={template.image_url} alt={template.name} className="w-16 h-16 rounded-[8px] object-contain bg-[#121619]" />
         )}
-        <div>
+        <div className="flex-1">
           <h2 className="text-white font-semibold text-base">{template.name}</h2>
           <p className="text-[#A0A4A8] text-sm">{template.short_desc}</p>
         </div>
       </div>
 
-      {/* Plan Selection */}
+      {/* Giá & Thanh toán */}
       {!qrDataUrl && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-[#A0A4A8] uppercase tracking-wider">Chọn gói đăng ký</h3>
-          {PLANS.map(plan => {
-            const price = calcPreviewAmount(basePrice, promoPct, plan.id)
-            const isSelected = selectedPlan === plan.id
-            return (
-              <button
-                key={plan.id}
-                id={`plan-${plan.id}`}
-                onClick={() => setSelectedPlan(plan.id)}
-                className={`relative flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${
-                  isSelected
-                    ? 'border-[#86C232] bg-[#86C232]/10'
-                    : 'border-[#6B6E70]/30 bg-[#181c1f]/50 hover:border-[#86C232]/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    isSelected ? 'border-[#86C232]' : 'border-[#6B6E70]'
-                  }`}>
-                    {isSelected && <div className="w-2 h-2 rounded-full bg-[#86C232]"></div>}
-                  </div>
-                  <span className="text-white font-medium">{plan.label}</span>
-                  {plan.popular && (
-                    <span className="text-[10px] font-semibold bg-[#61892F] text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Phổ biến
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {plan.badge && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#86C232] text-[#121619]">
-                      {plan.badge}
-                    </span>
-                  )}
-                  <div className="flex flex-col items-end">
-                    <span className="text-white font-bold">{price.toLocaleString('vi-VN')} đ</span>
-                    <span className="text-[10px] text-[#A0A4A8]">
-                      {Math.round(price / plan.multiplier).toLocaleString('vi-VN')} đ / tháng
-                    </span>
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Total Card */}
-      {!qrDataUrl && (
-        <div className="bg-[#181c1f] rounded-[12px] p-4 border border-[#6B6E70]/20">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-[#A0A4A8] uppercase tracking-wider">Tổng thanh toán</span>
-            <span className="text-2xl font-bold text-[#86C232]">
-              {calcPreviewAmount(basePrice, promoPct, selectedPlan).toLocaleString('vi-VN')} đ
-            </span>
+        <>
+          <div className="bg-[#181c1f] rounded-[12px] p-5 border border-[#6B6E70]/20 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-[#A0A4A8] uppercase tracking-wider">Giá mua một lần</span>
+              <div className="flex flex-col items-end">
+                {discountedPrice ? (
+                  <>
+                    <span className="text-sm text-[#6B6E70] line-through">{basePrice.toLocaleString('vi-VN')} đ</span>
+                    <span className="text-2xl font-bold text-[#86C232]">{discountedPrice.toLocaleString('vi-VN')} đ</span>
+                  </>
+                ) : (
+                  <span className="text-2xl font-bold text-[#86C232]">{basePrice.toLocaleString('vi-VN')} đ</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[#A0A4A8]">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+              Sở hữu vĩnh viễn, không tốn thêm phí
+            </div>
           </div>
-        </div>
+
+          <Button
+            id="btn-pay"
+            onClick={handlePayment}
+            isLoading={paymentLoading}
+            className="w-full text-lg font-semibold shadow-lg shadow-primary/20"
+            size="lg"
+          >
+            {paymentLoading ? 'Đang xử lý...' : 'Mua ngay'}
+          </Button>
+        </>
       )}
 
       {/* QR Code Area */}
@@ -315,20 +253,8 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {/* Pay Button */}
-      {!qrDataUrl &&          <Button
-            id="btn-pay"
-            onClick={handlePayment}
-            isLoading={paymentLoading}
-            className="w-full text-lg font-semibold shadow-lg shadow-primary/20"
-            size="lg"
-          >
-          {paymentLoading ? 'Đang xử lý...' : 'Thanh toán ngay'}
-        </Button>
-      }
-
       <p className="text-center text-xs text-[#A0A4A8]">
-        Thanh toán an toàn qua PayOS. Không có ô nhập mã giảm giá — giảm giá áp dụng tự động.
+        Thanh toán an toàn qua PayOS. Giá đã bao gồm khuyến mãi nếu có.
       </p>
     </div>
   )

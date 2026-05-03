@@ -66,7 +66,7 @@ CREATE TABLE orders (
   order_code      TEXT NOT NULL UNIQUE,
   user_id         UUID NOT NULL REFERENCES auth.users(id),
   template_id     UUID NOT NULL REFERENCES templates(id),
-  plan            TEXT NOT NULL CHECK (plan IN ('1month', '3months', '1year')),
+  plan            TEXT NOT NULL CHECK (plan IN ('1month', '3months', '1year', 'lifetime')),
   amount          NUMERIC NOT NULL,
   original_amount NUMERIC NOT NULL,
   discount_pct    INTEGER DEFAULT 0,
@@ -77,6 +77,18 @@ CREATE TABLE orders (
   created_at      TIMESTAMPTZ DEFAULT now(),
   paid_at         TIMESTAMPTZ
 );
+
+-- Bảng purchases (one-time purchase — không có expires_at)
+CREATE TABLE purchases (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  template_id  UUID NOT NULL REFERENCES templates(id),
+  order_id     UUID NOT NULL REFERENCES orders(id),
+  purchased_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, template_id)
+);
+CREATE INDEX idx_purchases_user_id     ON purchases(user_id);
+CREATE INDEX idx_purchases_template_id ON purchases(template_id);
 
 -- Bảng otp_codes
 CREATE TABLE otp_codes (
@@ -93,6 +105,7 @@ CREATE INDEX idx_otp_email ON otp_codes(email, is_used);
 -- RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
@@ -103,6 +116,9 @@ CREATE POLICY "profiles_self" ON profiles
   USING (id = auth.uid());
 
 CREATE POLICY "subscriptions_self" ON subscriptions
+  USING (user_id = auth.uid());
+
+CREATE POLICY "purchases_self" ON purchases
   USING (user_id = auth.uid());
 
 CREATE POLICY "orders_self" ON orders

@@ -4,25 +4,22 @@ import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
-import SubscriptionBadge from '../components/SubscriptionBadge'
 import Button from '../components/ui/Button'
 import toast from 'react-hot-toast'
-
-const PLAN_LABELS = { '1month': '1 Tháng', '3months': '3 Tháng', '1year': '1 Năm' }
 
 export default function AccountPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('subscriptions')
+  const [activeTab, setActiveTab] = useState('purchases')
 
-  // Guard: useEffect redirect — KHÔNG dùng if() trong render
+  // Guard: redirect nếu chưa đăng nhập
   useEffect(() => {
     if (!user) navigate('/login', { replace: true })
   }, [user, navigate])
 
-  const { data: subData, isLoading: subLoading } = useQuery({
-    queryKey: ['account-subscriptions'],
-    queryFn: () => apiFetch('/account/subscriptions'),
+  const { data: purchaseData, isLoading: purchaseLoading } = useQuery({
+    queryKey: ['account-purchases'],
+    queryFn: () => apiFetch('/account/purchases'),
     enabled: !!user,
   })
 
@@ -32,7 +29,7 @@ export default function AccountPage() {
     enabled: !!user,
   })
 
-  const subscriptions = subData?.data || []
+  const purchases = purchaseData?.data || []
   const orders = orderData?.data || []
 
   const handleSignOut = async () => {
@@ -63,17 +60,17 @@ export default function AccountPage() {
       {/* Tabs */}
       <div className="flex items-center border-b border-[#6B6E70]/30 w-full overflow-x-auto hide-scrollbar">
         <button
-          id="tab-subscriptions"
-          onClick={() => setActiveTab('subscriptions')}
+          id="tab-purchases"
+          onClick={() => setActiveTab('purchases')}
           className={`pb-3 px-6 text-sm font-semibold transition-all relative ${
-            activeTab === 'subscriptions'
+            activeTab === 'purchases'
               ? 'text-[#86C232]'
               : 'text-[#A0A4A8] hover:text-white'
           }`}
         >
-          Đăng ký của tôi
-          {activeTab === 'subscriptions' && (
-            <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-[#86C232] rounded-full transition-transform shadow-[0_0_10px_rgba(134,194,50,0.5)]"></div>
+          Ứng dụng đã mua
+          {activeTab === 'purchases' && (
+            <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-[#86C232] rounded-full shadow-[0_0_10px_rgba(134,194,50,0.5)]"></div>
           )}
         </button>
         <button
@@ -87,60 +84,55 @@ export default function AccountPage() {
         >
           Lịch sử thanh toán
           {activeTab === 'orders' && (
-            <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-[#86C232] rounded-full transition-transform shadow-[0_0_10px_rgba(134,194,50,0.5)]"></div>
+            <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-[#86C232] rounded-full shadow-[0_0_10px_rgba(134,194,50,0.5)]"></div>
           )}
         </button>
       </div>
 
-      {/* Subscriptions Tab */}
-      {activeTab === 'subscriptions' && (
+      {/* Purchases Tab */}
+      {activeTab === 'purchases' && (
         <div className="flex flex-col gap-4 mt-2">
-          {subLoading ? (
+          {purchaseLoading ? (
             <div className="flex justify-center p-12">
               <span className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[#86C232] border-t-transparent"></span>
             </div>
-          ) : subscriptions.length === 0 ? (
+          ) : purchases.length === 0 ? (
             <div className="text-center p-12 bg-[#181c1f] rounded-2xl border border-[#6B6E70]/20 shadow-xl">
-              <p className="text-[#A0A4A8] mb-6">Bạn chưa có đăng ký nào.</p>
+              <p className="text-[#A0A4A8] mb-6">Bạn chưa mua ứng dụng nào.</p>
               <Link to="/san-pham">
                 <Button>Khám phá templates</Button>
               </Link>
             </div>
           ) : (
-            subscriptions.map(sub => (
+            purchases.map(purchase => (
               <div
-                key={sub.id}
+                key={purchase.id}
                 className="flex items-center justify-between p-5 bg-[#181c1f] border border-[#6B6E70]/20 rounded-2xl hover:border-[#86C232]/40 transition-all shadow-md group"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl border border-[#6B6E70]/20 bg-[#121619] flex items-center justify-center overflow-hidden">
-                    {sub.templates?.icon ? (
-                      <img src={sub.templates.icon} alt="" className="w-10 h-10 object-contain" />
+                    {purchase.templates?.icon ? (
+                      <img src={purchase.templates.icon} alt="" className="w-10 h-10 object-contain" />
                     ) : (
-                      <span className="text-[#86C232] font-bold text-lg">{sub.templates?.name?.substring(0,2).toUpperCase()}</span>
+                      <span className="text-[#86C232] font-bold text-lg">{purchase.templates?.name?.substring(0, 2).toUpperCase()}</span>
                     )}
                   </div>
                   <div>
-                    <p className="text-white font-bold text-base group-hover:text-[#86C232] transition-colors">{sub.templates?.name}</p>
-                    <p className="text-[#A0A4A8] text-xs mt-1">
-                      Hết hạn: <span className="text-white font-medium">{formatDate(sub.expires_at)}</span>
-                    </p>
+                    <p className="text-white font-bold text-base group-hover:text-[#86C232] transition-colors">{purchase.templates?.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#86C232]/10 text-[#86C232] border border-[#86C232]/20">
+                        ∞ Vĩnh viễn
+                      </span>
+                      <span className="text-[#6B6E70] text-xs">Mua ngày {formatDate(purchase.purchased_at)}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-3">
-                  <SubscriptionBadge status={sub.status} daysLeft={sub.days} />
-                    <div className="flex gap-2">
-                      {(sub.status === 'expiring' || sub.status === 'grace' || sub.status === 'locked') && (
-                        <Link to={`/checkout/${sub.templates?.id}`}>
-                          <Button size="sm">Gia hạn</Button>
-                        </Link>
-                      )}
-                      {(sub.status === 'active' || sub.status === 'expiring') && sub.templates?.app_url && (
-                        <a href={sub.templates.app_url} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm">Mở app</Button>
-                        </a>
-                      )}
-                    </div>
+                <div>
+                  {purchase.templates?.app_url && (
+                    <a href={purchase.templates.app_url} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" className="whitespace-nowrap">Truy cập</Button>
+                    </a>
+                  )}
                 </div>
               </div>
             ))
@@ -168,7 +160,7 @@ export default function AccountPage() {
                 <div className="flex flex-col gap-2">
                   <p className="text-white font-bold text-base">{order.templates?.name}</p>
                   <p className="text-[#A0A4A8] text-xs flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-[#121619] border border-[#6B6E70]/20">{PLAN_LABELS[order.plan]}</span>
+                    <span className="px-2 py-0.5 rounded bg-[#121619] border border-[#6B6E70]/20">Mua một lần</span>
                     <span>•</span>
                     <span className="font-medium text-[#6B6E70]">{formatDate(order.paid_at || order.created_at)}</span>
                   </p>

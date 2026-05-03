@@ -64,7 +64,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-[400px]">
         <div className="text-center mb-8">
           <Link to="/" className="inline-block text-3xl font-bold text-[#86C232] tracking-tight mb-4">
-            ShopTemplate
+            PhanMemMau
           </Link>
           <h1 className="text-2xl font-bold text-white mb-2">Tạo tài khoản</h1>
           <p className="text-[#A0A4A8] text-sm">Bắt đầu trải nghiệm miễn phí</p>

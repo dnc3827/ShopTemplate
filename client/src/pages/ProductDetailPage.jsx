@@ -32,10 +32,10 @@ export default function ProductDetailPage() {
 
   const template = detailData?.data
 
-  const { data: subCheck, isLoading: checkLoading } = useQuery({
-    queryKey: ['subscriptionCheck', template?.id],
-    queryFn: () => apiFetch(`/subscriptions/check?template_id=${template.id}`),
-    enabled: !!user && !!template?.id, 
+  const { data: purchaseCheck, isLoading: checkLoading } = useQuery({
+    queryKey: ['purchaseCheck', template?.id],
+    queryFn: () => apiFetch(`/purchases/check?template_id=${template.id}`),
+    enabled: !!user && !!template?.id,
   })
 
   if (detailLoading) {
@@ -56,7 +56,7 @@ export default function ProductDetailPage() {
   }
 
   const isFree = template.price === 0 || template.categories?.is_free
-  const activeSubscription = subCheck?.data?.allowed
+  const hasPurchased = purchaseCheck?.data?.allowed
 
   const mediaItems = []
   if (template?.video_url) mediaItems.push({ type: 'video', url: template.video_url, thumbnail: template.image_url || null })
@@ -74,7 +74,7 @@ export default function ProductDetailPage() {
   }
 
   const handleActionClick = () => {
-    if (activeSubscription || isFree) {
+    if (hasPurchased || isFree) {
       window.open(template.app_url, '_blank')
     } else {
       if (!user) {
@@ -228,7 +228,7 @@ export default function ProductDetailPage() {
                     onClick={handleActionClick} 
                     className="w-full !py-3.5 !rounded-lg font-semibold shadow-lg shadow-primary/20" 
                   >
-                    {(activeSubscription || isFree) ? "Truy cập ứng dụng" : "Mua ngay"}
+                    {(hasPurchased || isFree) ? "Truy cập ứng dụng" : "Mua ngay"}
                   </Button>
                )}
              </div>

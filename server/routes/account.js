@@ -1,39 +1,32 @@
 import { Router } from 'express'
 import { auth } from '../middleware/auth.js'
 import { supabaseAdmin } from '../lib/supabase.js'
-import { getSubscriptionStatus } from '../services/subscription.service.js'
 
 const router = Router()
 
 /**
- * GET /api/account/subscriptions
- * Danh sách subscriptions của user đang đăng nhập
+ * GET /api/account/purchases
+ * Danh sách template đã mua của user (one-time, không có hạn)
  * user_id lấy từ req.user (JWT) — KHÔNG từ params
  */
-router.get('/subscriptions', auth, async (req, res) => {
+router.get('/purchases', auth, async (req, res) => {
   const userId = req.user.id
 
   const { data, error } = await supabaseAdmin
-    .from('subscriptions')
+    .from('purchases')
     .select(`
-      id, expires_at, is_active, created_at, updated_at,
+      id, purchased_at, order_id,
       templates ( id, slug, name, icon, image_url, app_url, price )
     `)
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('purchased_at', { ascending: false })
 
   if (error) {
-    console.error('getAccountSubscriptions error:', error)
-    return res.status(500).json({ error: 'Failed to fetch subscriptions' })
+    console.error('getAccountPurchases error:', error)
+    return res.status(500).json({ error: 'Failed to fetch purchases' })
   }
 
-  // Tính trạng thái mỗi subscription động — KHÔNG lưu DB
-  const subscriptions = (data || []).map(sub => ({
-    ...sub,
-    ...getSubscriptionStatus(sub.expires_at),
-  }))
-
-  res.json({ data: subscriptions })
+  res.json({ data: data || [] })
 })
 
 /**
@@ -47,7 +40,7 @@ router.get('/orders', auth, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('orders')
     .select(`
-      id, order_code, plan, amount, original_amount, discount_pct,
+      id, order_code, amount, original_amount, discount_pct,
       status, created_at, paid_at,
       templates ( id, slug, name, icon )
     `)

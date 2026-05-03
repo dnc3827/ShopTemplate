@@ -42,7 +42,7 @@ export default function LandingPage() {
         
         <h1 className="relative z-10 text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
           Xây dựng dự án nhanh hơn với<br />
-          <span className="text-[#86C232]">ShopTemplate</span>
+          <span className="text-[#86C232]">PhanMemMau</span>
         </h1>
         <p className="text-[15px] md:text-lg text-[#A0A4A8] max-w-xl mx-auto leading-relaxed">
           Kho giao diện chất lượng cao, tối ưu hóa cho tốc độ và trải nghiệm người dùng. Bắt đầu ngay hôm nay để tiết kiệm hàng trăm giờ code.
@@ -54,11 +54,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Tại sao chọn ShopTemplate */}
+      {/* Tại sao chọn PhanMemMau */}
       <section className="px-4 max-w-7xl mx-auto w-full py-10 md:py-16 fade-up">
         <div className="mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
-            Tại sao chọn ShopTemplate
+            Tại sao chọn PhanMemMau
           </h2>
           <div className="w-12 h-1 bg-[#86C232] mt-3"></div>
         </div>

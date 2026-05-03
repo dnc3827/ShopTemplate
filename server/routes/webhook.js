@@ -1,11 +1,9 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabase.js'
 import { verifyWebhookSignature } from '../services/payos.service.js'
+import { sendPurchaseEmail } from '../services/email.service.js'
 
 const router = Router()
-
-// Days to add per plan
-const PLAN_DAYS = { '1month': 30, '3months': 90, '1year': 365 }
 
 /**
  * POST /api/webhook/payos
@@ -15,18 +13,14 @@ const PLAN_DAYS = { '1month': 30, '3months': 90, '1year': 365 }
  * ⚠️ Verify HMAC bắt buộc trước khi xử lý
  */
 router.post('/payos', async (req, res) => {
-  // Bước 1: Luôn ack 200 trước — sau đó xử lý bất đồng bộ hoặc inline
-  // (Theo pattern idempotent — PayOS không chờ response body)
-
   try {
     const body = req.body
 
-    // Bước 2: Verify HMAC checksum
+    // Bước 1: Verify HMAC checksum
     const isValid = verifyWebhookSignature(body)
 
     if (!isValid) {
       console.warn('PayOS webhook: invalid HMAC signature', body)
-      // Trả 200 nhưng không xử lý — tránh expose logic lỗi
       return res.status(200).json({ success: false, message: 'Invalid signature' })
     }
 
@@ -38,15 +32,15 @@ router.post('/payos', async (req, res) => {
     console.log('[Webhook] Order code:', orderCode)
     console.log('[Webhook] Is Paid:', isPaid)
 
-    // Bước 3: Chỉ xử lý khi thanh toán thành công
+    // Bước 2: Chỉ xử lý khi thanh toán thành công
     if (!isPaid) {
       return res.status(200).json({ success: true, message: 'Non-paid event acknowledged' })
     }
 
-    // Bước 4: Tìm order theo orderCode
+    // Bước 3: Tìm order theo orderCode
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('id, user_id, template_id, plan, status')
+      .select('id, user_id, template_id, status')
       .eq('order_code', String(orderCode))
       .single()
 
@@ -57,12 +51,12 @@ router.post('/payos', async (req, res) => {
       return res.status(200).json({ success: false, message: 'Order not found' })
     }
 
-    // Bước 5: Idempotency — bỏ qua nếu đã paid
+    // Bước 4: Idempotency — bỏ qua nếu đã paid
     if (order.status === 'paid') {
       return res.status(200).json({ success: true, message: 'Already processed' })
     }
 
-    // Bước 6: Cập nhật order → paid
+    // Bước 5: Cập nhật order → paid
     const paidAt = new Date().toISOString()
     const updateResult = await supabaseAdmin
       .from('orders')
@@ -72,35 +66,49 @@ router.post('/payos', async (req, res) => {
 
     console.log('[Webhook] Order updated:', updateResult)
 
-    // Bước 7: Tính expires_at theo plan
-    const days = PLAN_DAYS[order.plan]
-    const expiresAt = days
-      ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-      : null  // null = vĩnh viễn (không có plan phù hợp thì activate vĩnh viễn)
-
-    // Bước 8: Upsert subscription
-    const subResult = await supabaseAdmin
-      .from('subscriptions')
+    // Bước 6: Lưu vào bảng purchases (one-time purchase, không có expires_at)
+    const purchaseResult = await supabaseAdmin
+      .from('purchases')
       .upsert(
         {
           user_id: order.user_id,
           template_id: order.template_id,
-          expires_at: expiresAt,
-          is_active: true,
-          updated_at: paidAt,
+          order_id: order.id,
+          purchased_at: paidAt,
         },
         { onConflict: 'user_id,template_id' }
       )
       .select()
 
-    console.log('[Webhook] Subscription created:', subResult)
+    console.log('[Webhook] Purchase created:', purchaseResult)
 
-    if (subResult.error) {
-      console.error('PayOS webhook: upsert subscription error', subResult.error)
+    if (purchaseResult.error) {
+      console.error('PayOS webhook: upsert purchase error', purchaseResult.error)
       // Không throw — đã paid, sẽ handle thủ công nếu cần
     }
 
-    console.log(`PayOS webhook: order ${orderCode} processed successfully`)
+    // Bước 7: Gửi email thông báo (non-blocking)
+    try {
+      // Lấy email user + thông tin template để gửi email
+      const [userRes, templateRes] = await Promise.all([
+        supabaseAdmin.auth.admin.getUserById(order.user_id),
+        supabaseAdmin.from('templates').select('name, app_url').eq('id', order.template_id).single(),
+      ])
+
+      const userEmail = userRes?.data?.user?.email
+      const templateName = templateRes?.data?.name
+      const appUrl = templateRes?.data?.app_url
+
+      if (userEmail && templateName) {
+        await sendPurchaseEmail(userEmail, templateName, appUrl)
+        console.log('[Webhook] Purchase email sent to:', userEmail)
+      }
+    } catch (emailErr) {
+      // Email thất bại không ảnh hưởng đến order
+      console.error('[Webhook] Send purchase email failed:', emailErr.message)
+    }
+
+    console.log(`[Webhook] order ${orderCode} processed successfully`)
     return res.status(200).json({ success: true })
 
   } catch (err) {
@@ -126,10 +134,9 @@ router.post('/manual-confirm', async (req, res) => {
   }
 
   try {
-    // Tìm order
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('id, user_id, template_id, plan, status')
+      .select('id, user_id, template_id, status')
       .eq('order_code', String(order_code))
       .single()
 
@@ -141,35 +148,29 @@ router.post('/manual-confirm', async (req, res) => {
       return res.status(200).json({ success: true, message: 'Already processed' })
     }
 
-    // Cập nhật order → paid
     const paidAt = new Date().toISOString()
+
+    // Cập nhật order → paid
     await supabaseAdmin
       .from('orders')
       .update({ status: 'paid', paid_at: paidAt })
       .eq('id', order.id)
 
-    // Tính expires_at theo plan
-    const days = PLAN_DAYS[order.plan]
-    const expiresAt = days
-      ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-      : null
-
-    // Upsert subscription
-    const { error: subError } = await supabaseAdmin
-      .from('subscriptions')
+    // Upsert purchase
+    const { error: purchaseError } = await supabaseAdmin
+      .from('purchases')
       .upsert(
         {
           user_id: order.user_id,
           template_id: order.template_id,
-          expires_at: expiresAt,
-          is_active: true,
-          updated_at: paidAt,
+          order_id: order.id,
+          purchased_at: paidAt,
         },
         { onConflict: 'user_id,template_id' }
       )
 
-    if (subError) {
-      console.error('[DEV] manual-confirm: upsert subscription error', subError)
+    if (purchaseError) {
+      console.error('[DEV] manual-confirm: upsert purchase error', purchaseError)
     }
 
     console.log(`[DEV] manual-confirm: order ${order_code} activated successfully`)
@@ -182,4 +183,3 @@ router.post('/manual-confirm', async (req, res) => {
 })
 
 export default router
-
