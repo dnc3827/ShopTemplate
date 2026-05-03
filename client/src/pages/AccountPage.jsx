@@ -119,11 +119,11 @@ export default function AccountPage() {
                   </div>
                   <div>
                     <p className="text-white font-bold text-base group-hover:text-[#86C232] transition-colors">{purchase.templates?.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#86C232]/10 text-[#86C232] border border-[#86C232]/20">
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#86C232]/10 text-[#86C232] border border-[#86C232]/20 whitespace-nowrap">
                         ∞ Vĩnh viễn
                       </span>
-                      <span className="text-[#6B6E70] text-xs">Mua ngày {formatDate(purchase.purchased_at)}</span>
+                      <span className="text-[#6B6E70] text-xs whitespace-nowrap">Mua ngày {formatDate(purchase.purchased_at)}</span>
                     </div>
                   </div>
                 </div>

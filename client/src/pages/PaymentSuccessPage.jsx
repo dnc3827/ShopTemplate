@@ -121,16 +121,6 @@ export default function PaymentSuccessPage() {
         )}
 
         <Button
-          id="btn-account"
-          onClick={() => navigate('/tai-khoan')}
-          variant="outline"
-          className="w-full"
-          size="lg"
-        >
-          Xem ứng dụng đã mua
-        </Button>
-
-        <Button
           id="btn-home"
           onClick={() => navigate('/')}
           variant="ghost"
